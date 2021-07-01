@@ -6,6 +6,8 @@ import android.os.SystemClock;
 import android.support.annotation.Nullable;
 import android.util.Log;
 
+import com.sample.startup.gc.utils.ExeCommandUtils;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -227,7 +229,10 @@ public class ProcessCpuTracker {
         }
 
 
-        final String[] loadAverages = readProcFile("/proc/loadavg");
+        String[] loadAverages = readProcFile("/proc/loadavg");
+        if (loadAverages == null){
+            loadAverages = exeUptimeCmd();
+        }
 
         if (loadAverages != null) {
             float load1 = Float.parseFloat(loadAverages[LOAD_AVERAGE_1_MIN]);
@@ -564,6 +569,40 @@ public class ProcessCpuTracker {
 
             return procFileContents.split(" ");
         } catch (IOException ioe) {
+            ioe.printStackTrace();
+            return null;
+        } finally {
+            SystemInfo.closeQuietly(procFile);
+        }
+
+    }
+
+    protected String[] exeUptimeCmd(){
+        String content = exeCmd("uptime");
+        //15:08:48 up 7 days,  4:05,  0 users,  load average: 44.70, 44.95, 44.65
+        if (content != null){
+            String averageStr = "average:";
+            int index = content.indexOf(averageStr);
+            if (index > 0) {
+                String average = content.substring(index + averageStr.length());
+                if (average != null) {
+                    String times[] = average.split(",");
+                    if (times != null && times.length >= 3) {
+                        return times;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    protected String exeCmd(String cmd) {
+        RandomAccessFile procFile = null;
+        String procFileContents;
+        try {
+            procFileContents = ExeCommandUtils.execSh(cmd, null,null);
+            Log.i("ZCB","cmd:"+cmd+",procFileContents:"+procFileContents);
+            return procFileContents;
+        } catch (Exception ioe) {
             ioe.printStackTrace();
             return null;
         } finally {
